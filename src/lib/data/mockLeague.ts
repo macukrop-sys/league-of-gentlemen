@@ -142,7 +142,7 @@ function makePlayer(rand: () => number, position: Exclude<Position, "FLEX" | "BN
 
 const BENCH_POOL: Exclude<Position, "FLEX" | "BN" | "IR">[] = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "K", "DST"];
 
-function generateRoster(teamId: string, rand: () => number): Roster {
+export function generateRoster(teamId: string, rand: () => number): Roster {
   const players: Record<string, Player> = {};
   const starters: RosterSlot[] = [];
   let idx = 0;
@@ -295,4 +295,55 @@ function sumStarterPoints(roster: Roster): number {
     const p = roster.players[slot.playerId];
     return sum + (p?.actualPoints ?? 0);
   }, 0);
+}
+
+/**
+ * Roster snapshot for an arbitrary week, for the "any week" box-score page.
+ * The mock generator only ever built one live roster (the current week) —
+ * for every other week it only has the team-level score. So this
+ * deterministically (seeded per team+week, stable across requests)
+ * generates a full roster with the same shape as the real one, then scales
+ * every player's points so the starters' total matches the score already
+ * on record for that matchup — the box score always reconciles with the
+ * standings, even though the specific players/points are a plausible
+ * reconstruction rather than "real" history. A real provider (ESPN/Sleeper)
+ * doesn't need this: it just asks the platform for that week's real data.
+ */
+export function getMockRosterSnapshotForWeek(week: number): Record<string, Roster> {
+  const league = getMockLeague();
+  if (week === league.settings.currentWeek) return league.rosters;
+
+  const isPast = week < league.settings.currentWeek;
+  const out: Record<string, Roster> = {};
+
+  for (const team of league.teams) {
+    const matchup = league.matchups.find((m) => m.week === week && (m.homeTeamId === team.id || m.awayTeamId === team.id));
+    const isHome = matchup?.homeTeamId === team.id;
+    const targetTotal = matchup ? (isHome ? matchup.homeScore : matchup.awayScore) : 0;
+
+    const rand = mulberry32(hashStringToSeed(`${team.id}-week-${week}`));
+    const roster = generateRoster(team.id, rand);
+
+    if (isPast && targetTotal > 0) {
+      const startersSum = sumStarterPoints(roster);
+      const scale = startersSum > 0 ? targetTotal / startersSum : 1;
+      for (const p of Object.values(roster.players)) {
+        p.actualPoints = +(p.actualPoints * scale).toFixed(1);
+        p.projectedPoints = p.actualPoints;
+        p.gameFinal = true;
+        p.gameInProgress = false;
+      }
+    } else if (!isPast) {
+      // Future week: nothing has happened yet, so show the projection only.
+      for (const p of Object.values(roster.players)) {
+        p.actualPoints = 0;
+        p.gameFinal = false;
+        p.gameInProgress = false;
+      }
+    }
+
+    out[team.id] = roster;
+  }
+
+  return out;
 }

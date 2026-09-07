@@ -1,7 +1,7 @@
-import type { League } from "@/lib/types";
-import { getMockLeague } from "./mockLeague";
-import { fetchLeagueFromSleeper } from "@/lib/sleeper/adapter";
-import { fetchLeagueFromEspn } from "@/lib/espn/adapter";
+import type { League, Roster } from "@/lib/types";
+import { getMockLeague, getMockRosterSnapshotForWeek } from "./mockLeague";
+import { fetchLeagueFromSleeper, fetchSleeperRosterSnapshot } from "@/lib/sleeper/adapter";
+import { fetchLeagueFromEspn, fetchEspnRosterSnapshot } from "@/lib/espn/adapter";
 import { cache, CACHE_TTL } from "@/lib/cache";
 
 /**
@@ -26,6 +26,35 @@ export async function getLeague(): Promise<League> {
   }
 
   return getMockLeague();
+}
+
+/**
+ * Full roster snapshot (starters + bench, per-player points) for an
+ * arbitrary week — powers the week-by-week box score page. Uses the same
+ * provider precedence as `getLeague()`, so it always matches whichever
+ * source is actually configured.
+ */
+export async function getRostersForWeek(league: League, week: number): Promise<Record<string, Roster>> {
+  const isLive = week === league.settings.currentWeek;
+
+  const espnLeagueId = process.env.ESPN_LEAGUE_ID?.trim();
+  if (espnLeagueId) {
+    const season = Number(process.env.ESPN_SEASON ?? new Date().getFullYear());
+    const ttl = isLive ? CACHE_TTL.liveScores : CACHE_TTL.staticPlayerData;
+    return cache.getOrFetchSWR(`rosters:espn:${espnLeagueId}:${season}:${week}`, ttl, () =>
+      fetchEspnRosterSnapshot(espnLeagueId, season, week, isLive),
+    );
+  }
+
+  const sleeperLeagueId = process.env.SLEEPER_LEAGUE_ID?.trim();
+  if (sleeperLeagueId) {
+    const ttl = isLive ? CACHE_TTL.liveScores : CACHE_TTL.staticPlayerData;
+    return cache.getOrFetchSWR(`rosters:sleeper:${sleeperLeagueId}:${week}`, ttl, () =>
+      fetchSleeperRosterSnapshot(sleeperLeagueId, week, isLive),
+    );
+  }
+
+  return getMockRosterSnapshotForWeek(week);
 }
 
 export type DataSourceName = "ESPN" | "Sleeper" | "Demo";

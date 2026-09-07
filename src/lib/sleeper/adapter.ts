@@ -108,15 +108,7 @@ export async function fetchLeagueFromSleeper(leagueId: string): Promise<League> 
   const streakByTeam = computeStreaksFromMatchups(teams, matchups);
   for (const t of teams) t.streak = streakByTeam.get(t.id) ?? "-";
 
-  const currentWeekMatchups = await getMatchupsForWeek(leagueId, currentWeek, { live: true }).catch(() => [] as SleeperMatchup[]);
-  const matchupByRosterId = new Map(currentWeekMatchups.map((m) => [m.roster_id, m]));
-
-  const rostersOut: Record<string, Roster> = {};
-  for (const r of rosters) {
-    const teamId = rosterIdToTeamId.get(r.roster_id);
-    if (!teamId) continue;
-    rostersOut[teamId] = buildRoster(teamId, r, matchupByRosterId.get(r.roster_id), allPlayers, sleeperLeague.roster_positions);
-  }
+  const rostersOut = await buildRosterSnapshot(leagueId, currentWeek, true, rosters, rosterIdToTeamId, allPlayers, sleeperLeague.roster_positions);
 
   return {
     settings: {
@@ -134,6 +126,40 @@ export async function fetchLeagueFromSleeper(leagueId: string): Promise<League> 
     matchups,
     rosters: rostersOut,
   };
+}
+
+/**
+ * Roster snapshot for a single week, for any caller that already has the
+ * league's rosters/users/players fetched (avoids re-fetching them — those
+ * are cheap cache hits anyway, but this keeps `fetchLeagueFromSleeper`
+ * from making the roster-list/allPlayers calls twice).
+ */
+async function buildRosterSnapshot(
+  leagueId: string,
+  week: number,
+  isLive: boolean,
+  rosters: SleeperRoster[],
+  rosterIdToTeamId: Map<number, string>,
+  allPlayers: Record<string, SleeperPlayer>,
+  rosterPositions: string[],
+): Promise<Record<string, Roster>> {
+  const weekMatchups = await getMatchupsForWeek(leagueId, week, { live: isLive }).catch(() => [] as SleeperMatchup[]);
+  const matchupByRosterId = new Map(weekMatchups.map((m) => [m.roster_id, m]));
+
+  const rostersOut: Record<string, Roster> = {};
+  for (const r of rosters) {
+    const teamId = rosterIdToTeamId.get(r.roster_id);
+    if (!teamId) continue;
+    rostersOut[teamId] = buildRoster(teamId, r, matchupByRosterId.get(r.roster_id), allPlayers, rosterPositions);
+  }
+  return rostersOut;
+}
+
+/** Roster snapshot for an arbitrary week — the current week, or any other for the week-by-week box score page. */
+export async function fetchSleeperRosterSnapshot(leagueId: string, week: number, isLive: boolean): Promise<Record<string, Roster>> {
+  const [sleeperLeague, rosters, allPlayers] = await Promise.all([getLeague(leagueId), getRosters(leagueId), getAllPlayers()]);
+  const rosterIdToTeamId = new Map(rosters.map((r) => [r.roster_id, `roster-${r.roster_id}`]));
+  return buildRosterSnapshot(leagueId, week, isLive, rosters, rosterIdToTeamId, allPlayers, sleeperLeague.roster_positions);
 }
 
 function computeStreaksFromMatchups(teams: Team[], matchups: Matchup[]): Map<string, string> {

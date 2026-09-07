@@ -89,17 +89,7 @@ export async function fetchLeagueFromEspn(leagueId: string, season: number): Pro
 
   for (const t of teams) t.streak = computeStreak(t.id, matchups);
 
-  const boxscore = await getBoxscore(leagueId, season, currentWeek, true);
-  const rostersOut: Record<string, Roster> = {};
-  for (const m of boxscore.schedule) {
-    if (m.matchupPeriodId !== currentWeek) continue;
-    for (const side of [m.home, m.away]) {
-      if (!side) continue;
-      const teamId = espnIdToTeamId.get(side.teamId);
-      if (!teamId || !side.rosterForCurrentScoringPeriod) continue;
-      rostersOut[teamId] = buildRoster(teamId, side.rosterForCurrentScoringPeriod.entries, currentWeek);
-    }
-  }
+  const rostersOut = await fetchEspnRosterSnapshot(leagueId, season, currentWeek, true);
 
   return {
     settings: {
@@ -117,6 +107,31 @@ export async function fetchLeagueFromEspn(leagueId: string, season: number): Pro
     matchups,
     rosters: rostersOut,
   };
+}
+
+/**
+ * Roster snapshot (every team's starters + bench, with that week's actual
+ * and projected points) for a single week — the current week (used by
+ * `fetchLeagueFromEspn` above) or any other, for the week-by-week box
+ * score page. `isLive` controls cache TTL, not correctness: pass true only
+ * for the currently-in-progress week.
+ */
+export async function fetchEspnRosterSnapshot(leagueId: string, season: number, week: number, isLive: boolean): Promise<Record<string, Roster>> {
+  const leagueData = await getLeague(leagueId, season);
+  const espnIdToTeamId = new Map(leagueData.teams.map((t) => [t.id, `espn-${t.id}`]));
+
+  const boxscore = await getBoxscore(leagueId, season, week, isLive);
+  const rostersOut: Record<string, Roster> = {};
+  for (const m of boxscore.schedule) {
+    if (m.matchupPeriodId !== week) continue;
+    for (const side of [m.home, m.away]) {
+      if (!side) continue;
+      const teamId = espnIdToTeamId.get(side.teamId);
+      if (!teamId || !side.rosterForCurrentScoringPeriod) continue;
+      rostersOut[teamId] = buildRoster(teamId, side.rosterForCurrentScoringPeriod.entries, week);
+    }
+  }
+  return rostersOut;
 }
 
 function teamName(t: EspnTeam): string {
