@@ -16,17 +16,39 @@ const POSITION_STD_DEV: Record<Player["position"], number> = {
   K: 3.2,
 };
 
-/** Mean + variance of a player's final point total, given what's known right now. */
-function playerProjection(p: Player): { mean: number; variance: number } {
-  if (p.gameFinal) return { mean: p.actualPoints, variance: 0 };
-  const stdDev = POSITION_STD_DEV[p.position];
-  if (p.gameInProgress) {
-    // Already-scored points are locked in; remaining game time still carries
-    // roughly half a full game's worth of uncertainty.
-    const remainingMean = Math.max(0, p.projectedPoints - p.actualPoints) * 0.5;
-    return { mean: p.actualPoints + remainingMean, variance: (stdDev * 0.5) ** 2 };
-  }
-  return { mean: p.projectedPoints, variance: stdDev ** 2 };
+/**
+ * Best current estimate of a player's FINAL point total, given what's
+ * known right now: locked in once the game is final; the untouched
+ * pregame projection before kickoff; and, while the game is live, an
+ * extrapolation from their current pace rather than a number frozen at
+ * kickoff — a player already well past their projection should show a
+ * *higher* projected final, not the same pregame number, and one badly
+ * short of it should trend down.
+ *
+ * Neither ESPN nor Sleeper expose real game-clock/time-remaining data at
+ * the per-player level through what this app fetches, so "exactly how
+ * much game is left" isn't knowable here — this reacts sensibly to the
+ * score so far rather than tracking the clock precisely. It's the single
+ * source of truth for "live projection": RosterTable's Proj column and
+ * the win-probability model below both call this, so the numbers shown
+ * next to a live player never disagree with each other.
+ */
+export function estimateLiveFinal(player: Player): number {
+  if (player.gameFinal) return player.actualPoints;
+  if (!player.gameInProgress) return player.projectedPoints;
+  const { projectedPoints: pregame, actualPoints: actual } = player;
+  // Short of pace: assume just over half the remaining gap to the pregame
+  // number still closes. Ahead of pace: assume continued production
+  // proportional to what's already on the board (a hot start keeps paying
+  // off, just not indefinitely).
+  const remaining = actual < pregame ? (pregame - actual) * 0.55 : actual * 0.25;
+  return +(actual + remaining).toFixed(1);
+}
+
+function playerVariance(player: Player): number {
+  if (player.gameFinal) return 0;
+  const stdDev = POSITION_STD_DEV[player.position];
+  return player.gameInProgress ? (stdDev * 0.5) ** 2 : stdDev ** 2;
 }
 
 function teamProjection(roster: Roster): { mean: number; variance: number } {
@@ -36,9 +58,8 @@ function teamProjection(roster: Roster): { mean: number; variance: number } {
     if (!slot.playerId) continue;
     const player = roster.players[slot.playerId];
     if (!player) continue;
-    const p = playerProjection(player);
-    mean += p.mean;
-    variance += p.variance;
+    mean += estimateLiveFinal(player);
+    variance += playerVariance(player);
   }
   return { mean, variance };
 }

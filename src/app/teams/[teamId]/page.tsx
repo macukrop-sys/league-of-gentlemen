@@ -8,9 +8,10 @@ import { computeLuckIndex } from "@/lib/stats/luckIndex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TeamAvatar } from "@/components/teams/TeamAvatar";
+import { TeamBanner } from "@/components/teams/TeamBanner";
 import { ScoreHistoryChart } from "@/components/teams/ScoreHistoryChart";
 import { RosterTable } from "@/components/matchups/RosterTable";
-import { getTeamPhotoUrl, getTeamFirstRoundPick } from "@/lib/teamPhotos";
+import { getTeamFirstRoundPick } from "@/lib/teamPhotos";
 import { formatPct, formatPoints, formatSigned, ordinal } from "@/lib/utils";
 import { ArrowLeft, Star } from "lucide-react";
 
@@ -38,7 +39,6 @@ export default async function TeamPage({ params }: { params: { teamId: string } 
   const luckIndex = computeLuckIndex(league).find((l) => l.teamId === team.id);
 
   const roster = league.rosters[team.id];
-  const bannerUrl = getTeamPhotoUrl(team.id, team.name);
   const firstRoundPick = getTeamFirstRoundPick(team.id, team.name);
 
   return (
@@ -47,13 +47,10 @@ export default async function TeamPage({ params }: { params: { teamId: string } 
         <ArrowLeft className="h-3 w-3" /> All teams
       </Link>
 
-      {bannerUrl ? (
-        <div className="relative h-56 w-full overflow-hidden rounded-lg border border-border md:h-72">
-          {/* eslint-disable-next-line @next/next/no-img-element -- user-supplied photo lives in /public */}
-          <img src={bannerUrl} alt={`${team.name} banner`} className="h-full w-full object-cover" style={{ objectPosition: "50% 15%" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
-        </div>
-      ) : null}
+      <div className="relative h-56 w-full overflow-hidden rounded-lg border border-border md:h-72">
+        <TeamBanner teamId={team.id} name={team.name} className="h-full" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
+      </div>
 
       <div className="flex flex-wrap items-center gap-4">
         <TeamAvatar teamId={team.id} name={team.name} size={88} />

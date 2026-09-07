@@ -1,39 +1,77 @@
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPoints } from "@/lib/utils";
-import type { Roster } from "@/lib/types";
+import { estimateLiveFinal } from "@/lib/winProbability";
+import type { Player, Position, Roster } from "@/lib/types";
 
-function effectivePoints(gameFinal: boolean, gameInProgress: boolean, actual: number, projected: number) {
-  return gameFinal || gameInProgress ? actual : projected;
+/** Display order for starting slots — independent of whatever order the platform's API happens to return entries in (ESPN/Sleeper both return roster/draft order, not lineup order). */
+const SLOT_ORDER: Partial<Record<Position, number>> = { QB: 0, RB: 1, WR: 2, TE: 3, FLEX: 4, DST: 5, K: 6 };
+
+function statusLabel(player: Player): string {
+  if (player.gameFinal) return "Final";
+  if (player.gameInProgress) return "Live";
+  return "";
+}
+
+function PlayerRow({
+  slot,
+  player,
+  align,
+  className = "",
+}: {
+  slot: string;
+  player: Player | undefined;
+  align: "left" | "right";
+  className?: string;
+}) {
+  const live = player ? statusLabel(player) : "";
+  return (
+    <TableRow className={className}>
+      <TableCell className={`w-10 text-xs font-semibold text-muted-foreground ${align === "right" ? "text-right" : ""}`}>{slot}</TableCell>
+      <TableCell className={align === "right" ? "text-right" : ""}>
+        {player ? (
+          <>
+            <div className="text-sm font-medium">{player.name}</div>
+            <div className="text-xs text-muted-foreground">
+              {player.position} &middot; {player.nflTeam}
+              {live ? ` · ${live}` : ""}
+            </div>
+          </>
+        ) : (
+          <span className="text-sm text-muted-foreground">Empty</span>
+        )}
+      </TableCell>
+      <TableCell className={`w-14 font-tabular text-sm text-muted-foreground ${align === "right" ? "text-left" : "text-right"}`}>
+        {player ? formatPoints(estimateLiveFinal(player)) : "-"}
+      </TableCell>
+      <TableCell className={`w-14 font-tabular text-sm font-semibold ${align === "right" ? "text-left" : "text-right"}`}>
+        {player ? (player.gameFinal || player.gameInProgress ? formatPoints(player.actualPoints) : "-") : "-"}
+      </TableCell>
+    </TableRow>
+  );
 }
 
 export function RosterTable({ roster, align = "left" }: { roster: Roster; align?: "left" | "right" }) {
-  const starterRows = roster.starters.map((s) => ({ slot: s.slot, player: s.playerId ? roster.players[s.playerId] : undefined }));
-  const benchPlayers = roster.benchPlayerIds.map((id) => roster.players[id]).filter((p): p is NonNullable<typeof p> => Boolean(p));
+  const orderedStarters = roster.starters
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => (SLOT_ORDER[a.s.slot] ?? 99) - (SLOT_ORDER[b.s.slot] ?? 99) || a.i - b.i)
+    .map(({ s }) => s);
+
+  const benchPlayers = roster.benchPlayerIds.map((id) => roster.players[id]).filter((p): p is Player => Boolean(p));
 
   return (
     <div>
       <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10" />
+            <TableHead />
+            <TableHead className={`w-14 ${align === "right" ? "text-left" : "text-right"}`}>Proj</TableHead>
+            <TableHead className={`w-14 ${align === "right" ? "text-left" : "text-right"}`}>Live</TableHead>
+          </TableRow>
+        </TableHeader>
         <TableBody>
-          {starterRows.map(({ slot, player }, i) => (
-            <TableRow key={i}>
-              <TableCell className={`w-10 text-xs font-semibold text-muted-foreground ${align === "right" ? "text-right" : ""}`}>{slot}</TableCell>
-              <TableCell className={align === "right" ? "text-right" : ""}>
-                {player ? (
-                  <>
-                    <div className="text-sm font-medium">{player.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {player.position} &middot; {player.nflTeam}
-                      {player.gameFinal ? " · Final" : player.gameInProgress ? " · Live" : ""}
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-sm text-muted-foreground">Empty</span>
-                )}
-              </TableCell>
-              <TableCell className={`w-16 font-tabular text-sm font-semibold ${align === "right" ? "text-left" : "text-right"}`}>
-                {player ? formatPoints(effectivePoints(player.gameFinal, player.gameInProgress, player.actualPoints, player.projectedPoints)) : "-"}
-              </TableCell>
-            </TableRow>
+          {orderedStarters.map((s, i) => (
+            <PlayerRow key={i} slot={s.slot} player={s.playerId ? roster.players[s.playerId] : undefined} align={align} />
           ))}
         </TableBody>
       </Table>
@@ -44,16 +82,7 @@ export function RosterTable({ roster, align = "left" }: { roster: Roster; align?
           <Table>
             <TableBody>
               {benchPlayers.map((player) => (
-                <TableRow key={player.id} className="opacity-70">
-                  <TableCell className={`w-10 text-xs font-semibold text-muted-foreground ${align === "right" ? "text-right" : ""}`}>BN</TableCell>
-                  <TableCell className={align === "right" ? "text-right" : ""}>
-                    <div className="text-sm">{player.name}</div>
-                    <div className="text-xs text-muted-foreground">{player.position} &middot; {player.nflTeam}</div>
-                  </TableCell>
-                  <TableCell className={`w-16 font-tabular text-sm ${align === "right" ? "text-left" : "text-right"}`}>
-                    {formatPoints(effectivePoints(player.gameFinal, player.gameInProgress, player.actualPoints, player.projectedPoints))}
-                  </TableCell>
-                </TableRow>
+                <PlayerRow key={player.id} slot="BN" player={player} align={align} className="opacity-70" />
               ))}
             </TableBody>
           </Table>

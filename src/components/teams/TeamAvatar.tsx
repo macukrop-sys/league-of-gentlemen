@@ -1,17 +1,5 @@
 import { getTeamPhotoUrl } from "@/lib/teamPhotos";
-
-function initials(name: string): string {
-  const words = name.replace(/^The\s+/i, "").split(/\s+/).filter(Boolean);
-  const chars = words.slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "");
-  return chars.join("") || "?";
-}
-
-/** Deterministic hue from the team id, so a team's placeholder color is stable across renders. */
-function hueFromSeed(seed: string): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  return hash % 360;
-}
+import { initials, hueFromSeed } from "@/lib/teamVisuals";
 
 export function TeamAvatar({ teamId, name, size = 44 }: { teamId: string; name: string; size?: number }) {
   const photoUrl = getTeamPhotoUrl(teamId, name);
