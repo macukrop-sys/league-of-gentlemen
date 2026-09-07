@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { Newsreader, Public_Sans } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLeague, getDataSourceName } from "@/lib/data/provider";
+
+const publicSans = Public_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-sans" });
+const newsreader = Newsreader({ subsets: ["latin"], weight: ["400", "500", "600"], style: ["normal", "italic"], variable: "--font-display" });
 
 export const metadata: Metadata = {
   title: "The League of Gentlemen | Fantasy Analytics",
@@ -15,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const league = await getLeague();
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={`${publicSans.variable} ${newsreader.variable}`}>
       <body className="font-sans antialiased">
         <TooltipProvider delayDuration={150}>
           <div className="flex min-h-screen">

@@ -52,18 +52,6 @@ const config: Config = {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
-        gold: {
-          50: "#fdf8ec",
-          100: "#f9edc9",
-          200: "#f2d98d",
-          300: "#eabf4f",
-          400: "#e3a827",
-          500: "#c98916",
-          600: "#a56812",
-          700: "#814d14",
-          800: "#6b3f17",
-          900: "#5c3618",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -75,7 +63,7 @@ const config: Config = {
         display: ["var(--font-display)", "system-ui", "serif"],
       },
       boxShadow: {
-        glow: "0 0 0 1px hsl(var(--border)), 0 8px 30px -10px rgba(0,0,0,0.6)",
+        glow: "0 1px 0 rgba(255,255,255,0.4) inset, 0 10px 24px -14px rgba(40,28,10,0.22)",
       },
       keyframes: {
         "pulse-live": {

@@ -14,7 +14,7 @@ function hueFromSeed(seed: string): number {
 }
 
 export function TeamAvatar({ teamId, name, size = 44 }: { teamId: string; name: string; size?: number }) {
-  const photoUrl = getTeamPhotoUrl(teamId);
+  const photoUrl = getTeamPhotoUrl(teamId, name);
 
   if (photoUrl) {
     return (
@@ -24,7 +24,7 @@ export function TeamAvatar({ teamId, name, size = 44 }: { teamId: string; name: 
         alt={name}
         width={size}
         height={size}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, objectPosition: "50% 15%" }}
         className="shrink-0 rounded-full border border-border object-cover"
       />
     );

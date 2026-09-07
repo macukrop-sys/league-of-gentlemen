@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { TeamAvatar } from "@/components/teams/TeamAvatar";
 import { ScoreHistoryChart } from "@/components/teams/ScoreHistoryChart";
 import { RosterTable } from "@/components/matchups/RosterTable";
+import { getTeamPhotoUrl, getTeamFirstRoundPick } from "@/lib/teamPhotos";
 import { formatPct, formatPoints, formatSigned, ordinal } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -37,12 +38,22 @@ export default async function TeamPage({ params }: { params: { teamId: string } 
   const luckIndex = computeLuckIndex(league).find((l) => l.teamId === team.id);
 
   const roster = league.rosters[team.id];
+  const bannerUrl = getTeamPhotoUrl(team.id, team.name);
+  const firstRoundPick = getTeamFirstRoundPick(team.id, team.name);
 
   return (
     <div className="space-y-6">
       <Link href="/teams" className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-3 w-3" /> All teams
       </Link>
+
+      {bannerUrl ? (
+        <div className="relative h-56 w-full overflow-hidden rounded-lg border border-border md:h-72">
+          {/* eslint-disable-next-line @next/next/no-img-element -- user-supplied photo lives in /public */}
+          <img src={bannerUrl} alt={`${team.name} banner`} className="h-full w-full object-cover" style={{ objectPosition: "50% 15%" }} />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-4">
         <TeamAvatar teamId={team.id} name={team.name} size={88} />
@@ -59,6 +70,12 @@ export default async function TeamPage({ params }: { params: { teamId: string } 
             <Badge variant="outline" className="font-tabular">{ordinal(standingsRow.rank)} overall</Badge>
             <Badge variant="outline" className="font-tabular">{ordinal(standingsRow.divisionRank)} in division</Badge>
             <Badge variant="secondary" className="font-tabular">Streak {team.streak}</Badge>
+            {firstRoundPick ? (
+              <Badge variant="outline" className="gap-1">
+                <Star className="h-3 w-3" />
+                1st Rd: {firstRoundPick.player} ({firstRoundPick.position}, {firstRoundPick.nflTeam})
+              </Badge>
+            ) : null}
           </div>
         </div>
       </div>
