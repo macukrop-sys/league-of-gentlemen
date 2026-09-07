@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Radio, Users, Shield, BarChart3, Dices, SlidersHorizontal, Crown } from "lucide-react";
+import { LayoutDashboard, Radio, Users, Shield, BarChart3, Dices, SlidersHorizontal, Crown, Newspaper } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/live", label: "Live Analytics", icon: Radio },
   { href: "/matchups", label: "Matchups", icon: Users },
+  { href: "/recap", label: "Recap", icon: Newspaper },
   { href: "/teams", label: "Teams", icon: Shield },
   { href: "/stats", label: "Advanced Stats", icon: BarChart3 },
   { href: "/simulator", label: "Playoff Simulator", icon: Dices },
