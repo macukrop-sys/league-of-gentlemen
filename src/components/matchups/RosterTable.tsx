@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPoints } from "@/lib/utils";
 import { estimateLiveFinal } from "@/lib/winProbability";
@@ -30,7 +31,9 @@ function PlayerRow({
       <TableCell className={align === "right" ? "text-right" : ""}>
         {player ? (
           <>
-            <div className="text-sm font-medium">{player.name}</div>
+            <Link href={`/players/${player.id}`} className="text-sm font-medium hover:text-primary hover:underline">
+              {player.name}
+            </Link>
             <div className="text-xs text-muted-foreground">
               {player.position} &middot; {player.nflTeam}
               {live ? ` · ${live}` : ""}

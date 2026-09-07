@@ -119,6 +119,7 @@ export async function fetchLeagueFromEspn(leagueId: string, season: number): Pro
 export async function fetchEspnRosterSnapshot(leagueId: string, season: number, week: number, isLive: boolean): Promise<Record<string, Roster>> {
   const leagueData = await getLeague(leagueId, season);
   const espnIdToTeamId = new Map(leagueData.teams.map((t) => [t.id, `espn-${t.id}`]));
+  const regularSeasonWeeks = leagueData.settings.scheduleSettings.matchupPeriodCount;
 
   const boxscore = await getBoxscore(leagueId, season, week, isLive);
   const rostersOut: Record<string, Roster> = {};
@@ -128,7 +129,7 @@ export async function fetchEspnRosterSnapshot(leagueId: string, season: number, 
       if (!side) continue;
       const teamId = espnIdToTeamId.get(side.teamId);
       if (!teamId || !side.rosterForCurrentScoringPeriod) continue;
-      rostersOut[teamId] = buildRoster(teamId, side.rosterForCurrentScoringPeriod.entries, week);
+      rostersOut[teamId] = buildRoster(teamId, side.rosterForCurrentScoringPeriod.entries, week, regularSeasonWeeks);
     }
   }
   return rostersOut;
@@ -191,7 +192,25 @@ function playerPoints(p: EspnPlayer, week: number, statSourceId: 0 | 1): number 
   return p.stats?.find((s) => s.scoringPeriodId === week && s.statSourceId === statSourceId)?.appliedTotal ?? 0;
 }
 
-function buildRoster(teamId: string, entries: EspnRosterEntry[], week: number): Roster {
+/**
+ * ESPN's boxscore response embeds a player's `stats` for every scoring
+ * period they've played, not just the one this fetch is scoped to — so
+ * the whole season's game log rides along for free with whatever week's
+ * roster you were already fetching. Skips weeks with no data on either
+ * side (bye week, not yet played, or truly scored zero on a bye — an
+ * edge case not worth telling apart from "no data" here).
+ */
+function buildGameLog(espnPlayer: EspnPlayer, regularSeasonWeeks: number): { week: number; actualPoints: number; projectedPoints: number }[] {
+  const log: { week: number; actualPoints: number; projectedPoints: number }[] = [];
+  for (let week = 1; week <= regularSeasonWeeks; week++) {
+    const hasEntry = espnPlayer.stats?.some((s) => s.scoringPeriodId === week);
+    if (!hasEntry) continue;
+    log.push({ week, actualPoints: playerPoints(espnPlayer, week, 0), projectedPoints: playerPoints(espnPlayer, week, 1) });
+  }
+  return log;
+}
+
+function buildRoster(teamId: string, entries: EspnRosterEntry[], week: number, regularSeasonWeeks: number): Roster {
   const players: Record<string, Player> = {};
   const starters: RosterSlot[] = [];
   const benchPlayerIds: string[] = [];
@@ -215,6 +234,7 @@ function buildRoster(teamId: string, entries: EspnRosterEntry[], week: number): 
       // started. See Sleeper adapter's header comment for the same tradeoff.
       gameFinal: false,
       gameInProgress: actualPoints > 0,
+      gameLog: buildGameLog(espnPlayer, regularSeasonWeeks),
     };
     players[player.id] = player;
 

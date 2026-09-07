@@ -108,7 +108,7 @@ export async function fetchLeagueFromSleeper(leagueId: string): Promise<League> 
   const streakByTeam = computeStreaksFromMatchups(teams, matchups);
   for (const t of teams) t.streak = streakByTeam.get(t.id) ?? "-";
 
-  const rostersOut = await buildRosterSnapshot(leagueId, currentWeek, true, rosters, rosterIdToTeamId, allPlayers, sleeperLeague.roster_positions);
+  const rostersOut = await buildRosterSnapshot(leagueId, currentWeek, true, rosters, rosterIdToTeamId, allPlayers, sleeperLeague.roster_positions, weeklyResults);
 
   return {
     settings: {
@@ -133,6 +133,15 @@ export async function fetchLeagueFromSleeper(leagueId: string): Promise<League> 
  * league's rosters/users/players fetched (avoids re-fetching them — those
  * are cheap cache hits anyway, but this keeps `fetchLeagueFromSleeper`
  * from making the roster-list/allPlayers calls twice).
+ *
+ * `allWeeksResults` (index = week - 1), when the caller already has every
+ * week's matchups in hand, lets each player carry a full-season game log
+ * at no extra network cost — see `fetchLeagueFromSleeper`, the only
+ * caller that has this lying around. `fetchSleeperRosterSnapshot` below
+ * (an arbitrary single week, e.g. the Matchups page viewing a past week)
+ * doesn't have it and would need `regularSeasonWeeks` more fetches just
+ * to populate a game log nobody may look at — so it's left off there;
+ * `Player.gameLog` is simply absent on those rosters.
  */
 async function buildRosterSnapshot(
   leagueId: string,
@@ -142,6 +151,7 @@ async function buildRosterSnapshot(
   rosterIdToTeamId: Map<number, string>,
   allPlayers: Record<string, SleeperPlayer>,
   rosterPositions: string[],
+  allWeeksResults?: SleeperMatchup[][],
 ): Promise<Record<string, Roster>> {
   const weekMatchups = await getMatchupsForWeek(leagueId, week, { live: isLive }).catch(() => [] as SleeperMatchup[]);
   const matchupByRosterId = new Map(weekMatchups.map((m) => [m.roster_id, m]));
@@ -150,7 +160,7 @@ async function buildRosterSnapshot(
   for (const r of rosters) {
     const teamId = rosterIdToTeamId.get(r.roster_id);
     if (!teamId) continue;
-    rostersOut[teamId] = buildRoster(teamId, r, matchupByRosterId.get(r.roster_id), allPlayers, rosterPositions);
+    rostersOut[teamId] = buildRoster(teamId, r, matchupByRosterId.get(r.roster_id), allPlayers, rosterPositions, allWeeksResults);
   }
   return rostersOut;
 }
@@ -208,12 +218,24 @@ function normalizePosition(pos: string | undefined): Player["position"] {
   return "WR"; // unmapped/idp positions fall back rather than crash the adapter
 }
 
+function buildGameLog(playerId: string, rosterId: number, allWeeksResults: SleeperMatchup[][]): { week: number; actualPoints: number; projectedPoints: number }[] {
+  const log: { week: number; actualPoints: number; projectedPoints: number }[] = [];
+  allWeeksResults.forEach((weekMatchups, i) => {
+    const points = weekMatchups.find((m) => m.roster_id === rosterId)?.players_points?.[playerId];
+    if (points === undefined) return;
+    // No separate projection source on Sleeper's free API — same value in both fields (see file header).
+    log.push({ week: i + 1, actualPoints: points, projectedPoints: points });
+  });
+  return log;
+}
+
 function buildRoster(
   teamId: string,
   sleeperRoster: SleeperRoster,
   currentMatchup: SleeperMatchup | undefined,
   allPlayers: Record<string, SleeperPlayer>,
   rosterPositions: string[],
+  allWeeksResults?: SleeperMatchup[][],
 ): Roster {
   const playerIds = sleeperRoster.players ?? [];
   const starterIds = currentMatchup?.starters ?? sleeperRoster.starters ?? [];
@@ -233,6 +255,7 @@ function buildRoster(
       actualPoints,
       gameFinal: false,
       gameInProgress: actualPoints > 0,
+      gameLog: allWeeksResults ? buildGameLog(id, sleeperRoster.roster_id, allWeeksResults) : undefined,
     };
   }
 

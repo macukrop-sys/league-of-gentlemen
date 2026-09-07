@@ -275,6 +275,10 @@ export function getMockLeague(): League {
   }
 
   // Build current-week rosters + fill in the live matchup scores from them.
+  // These player identities are also the season-long roster used by
+  // getMockRosterSnapshotForWeek below — a mock team fields the same
+  // players every week, only their weekly performance (and, for past
+  // weeks, a synthesized game log) varies.
   const rosters: Record<string, Roster> = {};
   for (const t of teams) {
     rosters[t.id] = generateRoster(t.id, rand);
@@ -285,8 +289,35 @@ export function getMockLeague(): League {
     m.awayScore = +sumStarterPoints(rosters[m.awayTeamId]!).toFixed(1);
   }
 
+  for (const roster of Object.values(rosters)) {
+    for (const player of Object.values(roster.players)) {
+      const log: { week: number; actualPoints: number; projectedPoints: number }[] = [];
+      for (let week = 1; week < currentWeek; week++) {
+        const pts = computePlayerWeekScore(player, week);
+        log.push({ week, actualPoints: pts, projectedPoints: pts });
+      }
+      log.push({ week: currentWeek, actualPoints: player.actualPoints, projectedPoints: player.projectedPoints });
+      player.gameLog = log;
+    }
+  }
+
   cachedLeague = { settings: LEAGUE_SETTINGS, teams, divisions, matchups, rosters };
   return cachedLeague;
+}
+
+/**
+ * Deterministic (seeded by player id + week) mock score for a week other
+ * than the one a player's `projectedPoints`/`actualPoints` were generated
+ * for. Anchors the mean to the player's own current-week projection
+ * relative to their position's baseline — so a stud stays a stud and a
+ * bench scrub stays a scrub across the synthesized game log, instead of
+ * every week being an independent coin flip.
+ */
+function computePlayerWeekScore(player: Player, week: number): number {
+  const baseline = POSITION_BASELINE[player.position];
+  const skillRatio = baseline.mean > 0 ? player.projectedPoints / baseline.mean : 1;
+  const rand = mulberry32(hashStringToSeed(`${player.id}-gamelog-${week}`));
+  return Math.max(0, +randNormal(rand, baseline.mean * skillRatio, baseline.stdDev * 0.6).toFixed(1));
 }
 
 function sumStarterPoints(roster: Roster): number {
@@ -299,15 +330,17 @@ function sumStarterPoints(roster: Roster): number {
 
 /**
  * Roster snapshot for an arbitrary week, for the "any week" box-score page.
- * The mock generator only ever built one live roster (the current week) —
- * for every other week it only has the team-level score. So this
- * deterministically (seeded per team+week, stable across requests)
- * generates a full roster with the same shape as the real one, then scales
- * every player's points so the starters' total matches the score already
- * on record for that matchup — the box score always reconciles with the
- * standings, even though the specific players/points are a plausible
- * reconstruction rather than "real" history. A real provider (ESPN/Sleeper)
- * doesn't need this: it just asks the platform for that week's real data.
+ * Reuses the SAME player identities as the current week's roster (a mock
+ * team fields the same 15 players all season, matching how a real league
+ * works) rather than conjuring a fresh random roster per week — only each
+ * player's points for that specific week change. For a past week, the
+ * player already has a synthesized `gameLog` entry for it (see
+ * `getMockLeague`); those are scaled so the starters' total matches the
+ * score already on record for that matchup, so the box score always
+ * reconciles with the standings even though it's a plausible
+ * reconstruction rather than "real" history. A real provider (ESPN/
+ * Sleeper) doesn't need any of this: it just asks the platform for that
+ * week's real data.
  */
 export function getMockRosterSnapshotForWeek(week: number): Record<string, Roster> {
   const league = getMockLeague();
@@ -317,32 +350,30 @@ export function getMockRosterSnapshotForWeek(week: number): Record<string, Roste
   const out: Record<string, Roster> = {};
 
   for (const team of league.teams) {
+    const baseRoster = league.rosters[team.id];
+    if (!baseRoster) continue;
+
     const matchup = league.matchups.find((m) => m.week === week && (m.homeTeamId === team.id || m.awayTeamId === team.id));
     const isHome = matchup?.homeTeamId === team.id;
     const targetTotal = matchup ? (isHome ? matchup.homeScore : matchup.awayScore) : 0;
 
-    const rand = mulberry32(hashStringToSeed(`${team.id}-week-${week}`));
-    const roster = generateRoster(team.id, rand);
+    const players: Record<string, Player> = {};
+    for (const [id, base] of Object.entries(baseRoster.players)) {
+      const logEntry = base.gameLog?.find((g) => g.week === week);
+      const pts = logEntry?.actualPoints ?? (isPast ? computePlayerWeekScore(base, week) : 0);
+      players[id] = { ...base, actualPoints: isPast ? pts : 0, projectedPoints: isPast ? pts : computePlayerWeekScore(base, week), gameFinal: isPast, gameInProgress: false };
+    }
 
     if (isPast && targetTotal > 0) {
-      const startersSum = sumStarterPoints(roster);
+      const startersSum = baseRoster.starters.reduce((sum, slot) => sum + (slot.playerId ? players[slot.playerId]?.actualPoints ?? 0 : 0), 0);
       const scale = startersSum > 0 ? targetTotal / startersSum : 1;
-      for (const p of Object.values(roster.players)) {
+      for (const p of Object.values(players)) {
         p.actualPoints = +(p.actualPoints * scale).toFixed(1);
         p.projectedPoints = p.actualPoints;
-        p.gameFinal = true;
-        p.gameInProgress = false;
-      }
-    } else if (!isPast) {
-      // Future week: nothing has happened yet, so show the projection only.
-      for (const p of Object.values(roster.players)) {
-        p.actualPoints = 0;
-        p.gameFinal = false;
-        p.gameInProgress = false;
       }
     }
 
-    out[team.id] = roster;
+    out[team.id] = { ...baseRoster, players };
   }
 
   return out;

@@ -24,6 +24,17 @@ export interface Player {
   /** Whether this player is currently mid-game (actualPoints is live/partial). */
   gameInProgress: boolean;
   status?: "OUT" | "Q" | "D" | "IR" | "BYE";
+  /**
+   * Week-by-week fantasy scoring history, when the data source can supply
+   * it without extra network round-trips (ESPN's boxscore response
+   * embeds a player's whole-season stat history in the same payload as
+   * the current week, so this rides along for free there; Sleeper's
+   * per-week endpoint doesn't, so it's only populated on the roster
+   * built alongside `League.rosters`, not on every arbitrary-week
+   * fetch — see the adapters' comments). Absent/empty means "not
+   * available from this path," not "no games played."
+   */
+  gameLog?: { week: number; actualPoints: number; projectedPoints: number }[];
 }
 
 export interface RosterSlot {
