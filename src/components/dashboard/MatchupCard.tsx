@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WinProbabilityBar } from "./WinProbabilityBar";
@@ -7,6 +8,7 @@ import { formatPoints } from "@/lib/utils";
 import { TrendingUp } from "lucide-react";
 
 function TeamSide({
+  teamId,
   name,
   owner,
   score,
@@ -14,6 +16,7 @@ function TeamSide({
   optimal,
   align,
 }: {
+  teamId: string;
   name: string;
   owner: string;
   score: number;
@@ -23,7 +26,9 @@ function TeamSide({
 }) {
   return (
     <div className={align === "right" ? "text-right" : ""}>
-      <p className="text-sm font-semibold leading-tight">{name}</p>
+      <Link href={`/teams/${teamId}`} className="block text-sm font-semibold leading-tight hover:text-primary hover:underline">
+        {name}
+      </Link>
       <p className="text-xs text-muted-foreground">{owner}</p>
       <p className="mt-1 font-tabular text-2xl font-bold">{formatPoints(score)}</p>
       {projectedFinal !== undefined ? (
@@ -55,6 +60,7 @@ export function MatchupCard({
       <CardHeader className="pb-0">
         <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
           <TeamSide
+            teamId={matchup.homeTeam.id}
             name={matchup.homeTeam.name}
             owner={matchup.homeTeam.ownerName}
             score={matchup.homeScore}
@@ -64,6 +70,7 @@ export function MatchupCard({
           />
           <span className="pt-6 text-xs font-medium text-muted-foreground">VS</span>
           <TeamSide
+            teamId={matchup.awayTeam.id}
             name={matchup.awayTeam.name}
             owner={matchup.awayTeam.ownerName}
             score={matchup.awayScore}
