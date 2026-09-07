@@ -1,7 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Crown } from "lucide-react";
+import type { DataSourceName } from "@/lib/data/provider";
 
-export function Header({ leagueName, week, isLive }: { leagueName: string; week: number; isLive: boolean }) {
+export function Header({ leagueName, week, dataSource }: { leagueName: string; week: number; dataSource: DataSourceName }) {
+  const isLive = dataSource !== "Demo";
   return (
     <header className="flex items-center justify-between border-b border-border bg-card/40 px-4 py-3 backdrop-blur-sm md:px-6">
       <div className="flex items-center gap-2 md:hidden">
@@ -19,7 +21,7 @@ export function Header({ leagueName, week, isLive }: { leagueName: string; week:
             <span className={isLive ? "absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" : ""} />
             <span className={cnDot(isLive)} />
           </span>
-          {isLive ? "Live Sleeper data" : "Demo data"}
+          {isLive ? `Live ${dataSource} data` : "Demo data"}
         </Badge>
         <Badge className="font-tabular">Week {week}</Badge>
       </div>

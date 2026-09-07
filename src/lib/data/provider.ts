@@ -28,6 +28,11 @@ export async function getLeague(): Promise<League> {
   return getMockLeague();
 }
 
-export function isLiveDataSource(): boolean {
-  return Boolean(process.env.ESPN_LEAGUE_ID?.trim() || process.env.SLEEPER_LEAGUE_ID?.trim());
+export type DataSourceName = "ESPN" | "Sleeper" | "Demo";
+
+/** Which provider `getLeague()` is actually using — drives the "Live ESPN data" / "Demo data" badge in the header. */
+export function getDataSourceName(): DataSourceName {
+  if (process.env.ESPN_LEAGUE_ID?.trim()) return "ESPN";
+  if (process.env.SLEEPER_LEAGUE_ID?.trim()) return "Sleeper";
+  return "Demo";
 }
