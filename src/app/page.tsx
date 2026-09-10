@@ -5,7 +5,7 @@ import { computePowerRankingsWithTrend } from "@/lib/stats/powerRankings";
 import { computeLuckIndex } from "@/lib/stats/luckIndex";
 import { buildLiveView } from "@/lib/liveView";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { MatchupCard } from "@/components/dashboard/MatchupCard";
+import { ThisWeeksActionClient } from "@/components/dashboard/ThisWeeksActionClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Zap, Sparkles, CloudRain, ArrowRight, Radio, BarChart3, SlidersHorizontal } from "lucide-react";
 import { formatPoints, ordinal } from "@/lib/utils";
@@ -24,11 +24,6 @@ export default async function OverviewPage() {
   const teamsById = new Map(league.teams.map((t) => [t.id, t]));
   const luckiest = luckIndex[0];
   const unluckiest = luckIndex[luckIndex.length - 1];
-  const optimalByTeamId = new Map(live.optimalLineups.map((o) => [o.teamId, o]));
-
-  const closest = [...live.matchups]
-    .filter((m) => m.winProbability)
-    .sort((a, b) => Math.abs(a.winProbability!.homeWinProb - 0.5) - Math.abs(b.winProbability!.homeWinProb - 0.5))[0];
 
   return (
     <div className="space-y-6">
@@ -67,26 +62,7 @@ export default async function OverviewPage() {
         />
       </div>
 
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">This Week&apos;s Action</h2>
-          <Link href="/live" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-            Full live dashboard <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-        {closest ? (
-          <p className="mb-3 text-xs text-muted-foreground">
-            Closest race: <span className="font-medium text-foreground">{closest.homeTeam?.name}</span> vs{" "}
-            <span className="font-medium text-foreground">{closest.awayTeam?.name}</span> — a coin flip at{" "}
-            {Math.round((closest.winProbability?.homeWinProb ?? 0.5) * 100)}%.
-          </p>
-        ) : null}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {live.matchups.map((m) => (
-            <MatchupCard key={`${m.homeTeam?.id}-${m.awayTeam?.id}`} matchup={m} optimalByTeamId={optimalByTeamId} />
-          ))}
-        </div>
-      </div>
+      <ThisWeeksActionClient initialData={live} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <ToolLinkCard
